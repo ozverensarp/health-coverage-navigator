@@ -1,36 +1,17 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Health Coverage Navigator</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>
-:root{--bg:#f4f6fa;--card:#fff;--ink:#17233a;--mut:#64708a;--pri:#0b5cff;--ok:#117a4d;--bad:#b42318;--warn:#a15c00;--line:#e2e7f0}
-*{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
-header{background:#0f1c3a;color:#fff;padding:12px 24px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-header h1{font-size:17px;margin:0;flex:1}header select{padding:6px;border-radius:6px}
-.banner{background:#fff4d6;color:#6b4800;padding:6px 24px;font-size:12px}
-nav{display:flex;gap:4px;padding:0 24px;background:#fff;border-bottom:1px solid var(--line);overflow:auto}
-nav button{border:0;background:none;padding:12px 14px;cursor:pointer;font:inherit;color:var(--mut);border-bottom:2px solid transparent}
-nav button.on{color:var(--pri);border-color:var(--pri);font-weight:600}
-main{max-width:1200px;margin:20px auto;padding:0 24px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
-.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
-.kpi b{display:block;font-size:26px}.kpi span{color:var(--mut)}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:500;font-size:12px}
-.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:#eef2fb}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
-button.p{background:var(--pri);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit}
-input,select{padding:7px;border:1px solid var(--line);border-radius:6px;font:inherit}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-#map{height:460px;border-radius:8px}.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:800px){.split{grid-template-columns:1fr}}
-.list{max-height:460px;overflow:auto}.prov{padding:8px;border-bottom:1px solid var(--line);cursor:pointer}.prov:hover{background:#f4f7ff}
-.chat{height:380px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:8px;background:#f8f9fc;border-radius:8px}
-.m{max-width:80%;padding:8px 12px;border-radius:10px;white-space:pre-wrap}.u{align-self:flex-end;background:var(--pri);color:#fff}.a{background:#fff;border:1px solid var(--line)}
-.big{font-size:22px;font-weight:700}.flag{background:#fff4d6;padding:6px 10px;border-radius:6px;margin:4px 0;font-size:13px}
-.drop{border:2px dashed #b8c3d9;border-radius:10px;padding:20px;text-align:center;color:var(--mut)}
-</style></head><body>
-<header><h1>Health Coverage Navigator <small style="font-weight:400;opacity:.7">· Generali Tranquilidade × AdvanceCare</small></h1>
-<label>Policy <select id="pol"></select></label></header>
-<div class="banner">MVP demo: sample policy, mock providers and simulated prices. Not real Generali Tranquilidade or AdvanceCare data. Estimates are not binding.</div>
-<nav id="nav"></nav><main id="main"></main>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js"></script></body></html>
+<link rel="stylesheet" href="style.css"></head><body>
+<div class="banner">Demo with sample policy, mock providers and simulated prices. Not real Generali Tranquilidade or AdvanceCare data.</div>
+<header><div class="brand"><span class="logo">+</span><div><b>Coverage Navigator</b><small>Provided by your insurance broker</small></div></div>
+<nav id="nav"><a data-k="home">Check a treatment</a><a data-k="plan">My plan</a></nav>
+<button class="btn ghost" id="talk">Talk to my broker</button></header>
+<main id="main"></main>
+<button class="fab" id="fab">Ask a question</button>
+<aside id="chat" hidden><div class="ch"><b>Ask about your plan</b><button id="x" aria-label="Close">×</button></div>
+<div class="chat" id="log"></div><div class="sugg" id="sugg"></div>
+<div class="row"><input id="in" placeholder="Type your question"><button class="btn" id="send">Send</button></div></aside>
+<div id="modal" class="modal" hidden><div class="box"><h3>Talk to my broker</h3><p>Leave your details and your broker will contact you.</p>
+<input id="cn" placeholder="Your name"><input id="cc" placeholder="Phone or email"><textarea id="cm" placeholder="What do you need help with? (optional)"></textarea>
+<div class="row"><button class="btn" id="cs">Send request</button><button class="btn ghost" id="cx">Cancel</button></div><p id="cmsg"></p></div></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script></body></html>

@@ -61,7 +61,7 @@ function estimate(policy, treatment, providerId) {
   const remaining = policy.annualLimit != null ? Math.max(0, policy.annualLimit - (policy.annualUsed || 0)) : null;
   if (remaining != null && ins > remaining) { ins = remaining; flags.push(`Annual limit nearly exhausted: only €${remaining} remaining.`); }
   ins = Math.round(ins * 100) / 100;
-  flags.push("Simulated estimate for broker review. Not a binding quote.");
+  flags.push("Simulated estimate for illustration. Not a binding quote.");
   return { covered: true, clause, price, insurer: ins, customer: Math.round((price - ins) * 100) / 100, flags, provider: prov, remainingLimit: remaining };
 }
 
@@ -89,6 +89,20 @@ app.post("/api/estimate", (req, res) => {
   const { policyId, treatment, providerId } = req.body;
   const pol = policies.get(policyId); if (!pol) return res.status(404).json({ error: "Policy not found" });
   res.json(estimate(pol, treatment, providerId));
+});
+app.post("/api/answer", (req, res) => {
+  const { policyId, treatment, city } = req.body;
+  const pol = policies.get(policyId); if (!pol) return res.status(404).json({ error: "Policy not found" });
+  const clause = pol.clauses.find(c => c.treatment === treatment) || null;
+  const list = search({ city, treatment }).map(p => ({ ...p, est: estimate(pol, treatment, p.id) }));
+  list.sort((a, b) => (a.est.customer ?? 1e9) - (b.est.customer ?? 1e9));
+  res.json({ clause, treatment, city, base: estimate(pol, treatment), providers: list, policy: { name: pol.name, sample: pol.sample, annualLimit: pol.annualLimit, annualUsed: pol.annualUsed, startDate: pol.startDate } });
+});
+app.post("/api/contact", (req, res) => {
+  const { name, contact, message, policyId } = req.body;
+  if (!name || !contact) return res.status(400).json({ error: "Name and contact required" });
+  cases.push({ at: new Date().toISOString(), policy: policies.get(policyId)?.name || "-", question: `[Contact request] ${name} (${contact}): ${message || ""}` });
+  res.json({ ok: true });
 });
 app.get("/api/cases", (req, res) => res.json(cases));
 
