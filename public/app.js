@@ -1,72 +1,65 @@
-const $=(s,r=document)=>r.querySelector(s), api=(u,o)=>fetch(u,o).then(r=>r.json());
-const eur=n=>n==null?"—":"€"+Number(n).toFixed(2).replace(/\.00$/,"");
+const $=s=>document.querySelector(s), api=(u,o)=>fetch(u,o).then(r=>r.json());
+const post=(u,b)=>api(u,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)});
+const eur=n=>n==null?"–":"€"+Number(n).toFixed(2).replace(/\.00$/,"");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let S={policies:[],meta:null,pid:null,tab:"dashboard",map:null};
-const tabs={dashboard:"Dashboard",policy:"Policy analysis",providers:"Providers & map",estimate:"Cost estimate",chat:"AI chat",cases:"Broker cases"};
+const S={meta:null,policies:[],pid:null,t:"rootcanal",city:"Lisboa",map:null,sel:null};
 const pol=()=>S.policies.find(p=>p.id===S.pid);
-async function init(){S.meta=await api("/api/meta");await loadPolicies();
- $("#nav").innerHTML=Object.entries(tabs).map(([k,v])=>`<button data-k="${k}">${v}</button>`).join("");
- $("#nav").onclick=e=>{if(e.target.dataset.k)go(e.target.dataset.k)};
- $("#pol").onchange=e=>{S.pid=e.target.value;go(S.tab)};go("dashboard")}
-async function loadPolicies(sel){S.policies=await api("/api/policies");S.pid=sel||S.pid||S.policies[0].id;
- $("#pol").innerHTML=S.policies.map(p=>`<option value="${p.id}" ${p.id===S.pid?"selected":""}>${esc(p.name)}</option>`).join("")}
-function go(t){S.tab=t;if(S.map){S.map.remove();S.map=null}
- document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.k===t));views[t]($("#main"))}
-const tOpts=(all)=>(all?'<option value="">Any treatment</option>':"")+Object.entries(S.meta.treatments).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("");
-const views={
-dashboard(m){const p=pol();m.innerHTML=`<div class="grid">
-<div class="card kpi"><b>${p.clauses.filter(c=>!c.excluded).length}</b><span>Covered treatments</span></div>
-<div class="card kpi"><b>${p.clauses.filter(c=>c.excluded).length}</b><span>Exclusions</span></div>
-<div class="card kpi"><b>${p.annualLimit!=null?eur(p.annualLimit-p.annualUsed):"?"}</b><span>Annual limit remaining</span></div></div>
-<div class="card"><h3>Three questions, one place</h3><div class="grid">
-<div><b>Am I covered?</b><br>Review extracted clauses in <a href="#" onclick="go('policy');return false">Policy analysis</a>.</div>
-<div><b>Where can I go?</b><br>Search the network in <a href="#" onclick="go('providers');return false">Providers & map</a>.</div>
-<div><b>How much will I pay?</b><br>Run <a href="#" onclick="go('estimate');return false">Cost estimate</a>.</div></div></div>
-<div class="card"><h3>Ask the assistant</h3><p>Try: <i>"I need a root canal in Lisbon. Is it covered, which dentists, and how much will I pay?"</i></p><button class="p" onclick="go('chat')">Open chat</button></div>`},
-policy(m){const p=pol();m.innerHTML=`<div class="card"><h3>Upload a policy (PDF)</h3><div class="drop"><input type="file" id="f" accept="application/pdf"><p id="up">Text is extracted and matched to dental treatments. Always verify extracted values.</p></div></div>
-<div class="card"><h3>${esc(p.name)} ${p.sample?'<span class="tag">SAMPLE</span>':'<span class="tag warn">AUTO-EXTRACTED</span>'}</h3>
-<p>Insurer: ${esc(p.insurer)} · Network: ${esc(p.network)} · Holder: ${esc(p.holder)} · Annual limit: ${eur(p.annualLimit)} (used ${eur(p.annualUsed)})</p>
-<table><tr><th>Clause</th><th>Treatment</th><th>Status</th><th>Copay</th><th>Waiting</th><th>Text</th></tr>
-${p.clauses.map(c=>`<tr><td>${esc(c.id)}</td><td>${esc(c.title)}</td><td>${c.excluded?'<span class="bad">Excluded</span>':c.coverage==null?'<span class="warn">Review</span>':`<span class="ok">${c.coverage}%</span>`}</td><td>${eur(c.copay)}</td><td>${c.waitingMonths?c.waitingMonths+" mo":"—"}</td><td>${esc(c.text)}</td></tr>`).join("")||'<tr><td colspan=6>No dental clauses found.</td></tr>'}</table></div>`;
- $("#f").onchange=async e=>{const fd=new FormData();fd.append("file",e.target.files[0]);$("#up").textContent="Analysing…";
-  const r=await api("/api/policies/upload",{method:"POST",body:fd});if(r.error){$("#up").textContent=r.error;return}
-  await loadPolicies(r.id);go("policy")}},
-providers(m){m.innerHTML=`<div class="card"><div class="row">
-<select id="c"><option value="">All cities</option>${S.meta.cities.map(c=>`<option>${c}</option>`).join("")}</select>
-<select id="t">${tOpts(true)}</select>
-<select id="y"><option value="">Any type</option><option value="dentist">Dentist</option><option value="clinic">Clinic</option><option value="hospital">Hospital</option></select>
-<select id="s"><option value="">Any specialty</option>${S.meta.specialties.map(c=>`<option>${c}</option>`).join("")}</select>
-<input id="q" placeholder="Search name/address"></div>
-<div class="split"><div id="map"></div><div class="list" id="l"></div></div></div>`;
- S.map=L.map("map").setView([39.5,-8.2],6);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(S.map);
- let layer=L.layerGroup().addTo(S.map);
- const run=async()=>{const q=new URLSearchParams({city:$("#c").value,treatment:$("#t").value,type:$("#y").value,specialty:$("#s").value,q:$("#q").value});
-  const ps=await api("/api/providers?"+q);layer.clearLayers();const mk={};
-  ps.forEach(p=>{mk[p.id]=L.marker([p.lat,p.lng]).addTo(layer).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.address)}, ${p.city}<br>${p.specialties.join(", ")}`)});
-  if(ps.length)S.map.fitBounds(L.latLngBounds(ps.map(p=>[p.lat,p.lng])).pad(.3),{maxZoom:13});
-  $("#l").innerHTML=ps.map(p=>`<div class="prov" data-id="${p.id}"><b>${esc(p.name)}</b> <span class="tag">${p.type}</span><br><small>${esc(p.address)}, ${p.city} · ${p.specialties.join(", ")} · prices ${p.priceVerified?"verified":"unverified"}</small></div>`).join("")||"No providers match.";
-  $("#l").onclick=e=>{const d=e.target.closest(".prov");if(d)mk[d.dataset.id].openPopup()}};
- m.querySelectorAll("select,input").forEach(i=>i.oninput=run);run()},
-estimate(m){m.innerHTML=`<div class="card"><div class="row"><select id="t">${tOpts()}</select><select id="c"><option value="">All cities</option>${S.meta.cities.map(c=>`<option>${c}</option>`).join("")}</select><select id="pv"></select><button class="p" id="go">Estimate</button></div><div id="out"></div></div>`;
- const fill=async()=>{const ps=await api("/api/providers?"+new URLSearchParams({city:$("#c").value,treatment:$("#t").value}));
-  $("#pv").innerHTML=ps.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.city})</option>`).join("")||"<option value=''>No provider</option>"};
- $("#t").onchange=$("#c").onchange=fill;fill();
- $("#go").onclick=async()=>{const r=await api("/api/estimate",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({policyId:S.pid,treatment:$("#t").value,providerId:$("#pv").value})});
-  $("#out").innerHTML=estHtml(r)}},
-chat(m){m.innerHTML=`<div class="card"><div class="chat" id="log"><div class="m a">Hello. Ask about coverage, providers and costs for the selected policy.</div></div>
-<div class="row" style="margin-top:10px"><input id="in" style="flex:1" placeholder="I need a root canal in Lisbon. Is it covered, which dentists, how much?"><button class="p" id="send">Send</button></div><div id="ex"></div></div>`;
- const add=(c,t)=>{const d=document.createElement("div");d.className="m "+c;d.textContent=t;$("#log").append(d);$("#log").scrollTop=1e9};
- const send=async()=>{const t=$("#in").value.trim();if(!t)return;$("#in").value="";add("u",t);
-  const r=await api("/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({policyId:S.pid,message:t})});
-  add("a",r.reply||r.error);let h="";
-  if(r.clauses?.length)h+=r.clauses.map(c=>`<div class="flag">Clause ${esc(c.id)}: ${esc(c.text)}</div>`).join("");
-  if(r.providers?.length)h+="<b>Providers</b>"+r.providers.map(p=>`<div>${esc(p.name)} — ${p.city} (${eur(p.prices[r.treatment])})</div>`).join("");
-  if(r.estimate)h+=estHtml(r.estimate);
-  if(r.escalated)h+='<p class="warn"><b>Escalated to human broker</b></p>';$("#ex").innerHTML=h};
- $("#send").onclick=send;$("#in").onkeydown=e=>e.key==="Enter"&&send()},
-async cases(m){const c=await api("/api/cases");m.innerHTML=`<div class="card"><h3>Escalated to broker</h3><table><tr><th>Time</th><th>Policy</th><th>Question</th></tr>${c.map(x=>`<tr><td>${new Date(x.at).toLocaleString()}</td><td>${esc(x.policy)}</td><td>${esc(x.question)}</td></tr>`).join("")||"<tr><td colspan=3>No escalations yet.</td></tr>"}</table></div>`}};
-function estHtml(r){if(r.covered==null)return`<div class="flag">${r.flags.join("<br>")}</div>`;
- return`<div class="grid"><div class="card kpi"><span>Status</span><b class="${r.covered?"ok":"bad"}">${r.covered?"Covered":"Not covered"}</b></div>
-<div class="card kpi"><span>Price</span><b>${eur(r.price)}</b></div><div class="card kpi"><span>Insurer pays</span><b>${eur(r.insurer)}</b></div><div class="card kpi"><span>Customer pays</span><b>${eur(r.customer)}</b></div></div>
-${r.clause?`<p>Clause ${esc(r.clause.id)}: ${esc(r.clause.text)}</p>`:""}${r.flags.map(f=>`<div class="flag">⚠ ${esc(f)}</div>`).join("")}`}
+const friendly={checkup:"Check-up & cleaning",filling:"Filling",extraction:"Tooth removal",rootcanal:"Root canal",crown:"Crown",whitening:"Whitening",implant:"Implant",ortho:"Braces"};
+async function init(){S.meta=await api("/api/meta");await load();
+ $("#nav").onclick=e=>e.target.dataset.k&&go(e.target.dataset.k);
+ $("#talk").onclick=()=>{$("#modal").hidden=false};$("#cx").onclick=()=>{$("#modal").hidden=true};
+ $("#cs").onclick=async()=>{const r=await post("/api/contact",{name:$("#cn").value,contact:$("#cc").value,message:$("#cm").value,policyId:S.pid});
+  $("#cmsg").textContent=r.ok?"Thank you. Your broker will be in touch.":(r.error||"Error");if(r.ok)setTimeout(()=>{$("#modal").hidden=true;$("#cmsg").textContent=""},1800)};
+ $("#fab").onclick=()=>{$("#chat").hidden=false;$("#fab").hidden=true;$("#in").focus()};
+ $("#x").onclick=()=>{$("#chat").hidden=true;$("#fab").hidden=false};
+ $("#send").onclick=send;$("#in").onkeydown=e=>e.key==="Enter"&&send();
+ add("a","Hello. I can tell you what your plan covers, which dentists you can visit and what you would pay.");
+ $("#sugg").innerHTML=["I need a root canal in Lisbon","Are braces covered?","What is my annual limit?"].map(q=>`<button>${q}</button>`).join("");
+ $("#sugg").onclick=e=>{if(e.target.tagName==="BUTTON"){$("#in").value=e.target.textContent;send()}};
+ go("home")}
+async function load(sel){S.policies=await api("/api/policies");S.pid=sel||S.pid||S.policies[0].id}
+function add(c,t){const d=document.createElement("div");d.className="m "+c;d.textContent=t;$("#log").append(d);$("#log").scrollTop=1e9}
+async function send(){const t=$("#in").value.trim();if(!t)return;$("#in").value="";add("u",t);
+ const r=await post("/api/chat",{policyId:S.pid,message:t});add("a",r.reply||r.error);
+ if(r.escalated)add("a","I have passed this to your broker, who will follow up. You can also use \"Talk to my broker\".")}
+function go(k){if(S.map){S.map.remove();S.map=null}document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.k===k));
+ window.scrollTo(0,0);k==="plan"?plan($("#main")):home($("#main"))}
+function home(m){m.innerHTML=`<h1>Is my treatment covered?</h1><p class="lead">Choose your treatment and city. We will show what your plan covers, where you can go and what you would pay.</p>
+<div class="card"><label class="l">What treatment do you need?</label><div class="chips" id="chips">${Object.keys(S.meta.treatments).map(k=>`<button class="chip ${k===S.t?"on":""}" data-k="${k}">${friendly[k]}</button>`).join("")}</div>
+<label class="l" for="city">Where?</label><div class="chips"><select id="city">${S.meta.cities.map(c=>`<option ${c===S.city?"selected":""}>${c}</option>`).join("")}</select></div>
+<button class="btn" id="go">Check my coverage</button></div><div id="res"></div>`;
+ $("#chips").onclick=e=>{const k=e.target.dataset.k;if(!k)return;S.t=k;document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.k===k))};
+ $("#city").onchange=e=>S.city=e.target.value;$("#go").onclick=check;check()}
+async function check(){const r=await post("/api/answer",{policyId:S.pid,treatment:S.t,city:S.city});S.r=r;
+ const c=r.clause,b=r.base,best=r.providers[0];
+ let cov,cls,sub;
+ if(!c){cov="Not found";cls="warn";sub="Your plan does not mention this treatment. Ask your broker."}
+ else if(c.excluded){cov="Not covered";cls="bad";sub=c.needsPreauth?"Only possible with prior approval from the insurer.":"This treatment is excluded from your plan."}
+ else{cov=c.coverage!=null?`Covered at ${c.coverage}%`:"To be confirmed";cls=c.coverage!=null?"ok":"warn";sub=(c.waitingMonths?`Waiting period: ${c.waitingMonths} months from the start of your plan. `:"")+(c.copay?`Fixed fee of ${eur(c.copay)} per visit. `:"")+"Applies at AdvanceCare network providers."}
+ const showCost=c&&!c.excluded&&best?.est.price!=null;
+ $("#res").innerHTML=`<div class="steps">
+ <div class="card ans ${cls}"><div class="q">1. Am I covered?</div><div class="a">${cov}</div><div class="mut">${esc(sub)}</div>${c?`<details><summary class="mut">Policy wording (clause ${esc(c.id)})</summary><p>${esc(c.text)}</p></details>`:""}</div>
+ <div class="card ans"><div class="q">2. Where can I go?</div><div class="a">${r.providers.length} provider${r.providers.length===1?"":"s"}</div><div class="mut">AdvanceCare network in ${esc(S.city)} offering ${friendly[S.t].toLowerCase()}.</div></div>
+ <div class="card ans ${showCost?"":"warn"}"><div class="q">3. How much will I pay?</div><div class="a">${showCost?"from "+eur(best.est.customer):c?.excluded?"Full price":"Unknown"}</div><div class="mut">${showCost?`Cheapest option for you (price ${eur(best.est.price)}, insurer pays ${eur(best.est.insurer)}).`:"Prices depend on the provider."}</div></div></div>
+ ${r.providers.length?`<div class="card"><h2>Providers in ${esc(S.city)}</h2><div class="split"><div id="map"></div><div class="plist" id="pl"></div></div></div>`:`<div class="card">No providers found in ${esc(S.city)} for this treatment. Try another city.</div>`}
+ <div id="detail"></div>`;
+ if(r.providers.length)drawMap(r)}
+function drawMap(r){S.map=L.map("map").setView([39.5,-8.2],6);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(S.map);
+ const mk={};r.providers.forEach(p=>mk[p.id]=L.marker([p.lat,p.lng]).addTo(S.map).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.address)}`));
+ S.map.fitBounds(L.latLngBounds(r.providers.map(p=>[p.lat,p.lng])).pad(.4),{maxZoom:14});
+ $("#pl").innerHTML=r.providers.map((p,i)=>`<div class="prov" data-id="${p.id}">${p.est.customer!=null?`<div class="pr"><b>${eur(p.est.customer)}</b><span class="mut">you pay</span></div>`:""}<b>${esc(p.name)}</b>${i===0&&p.est.customer!=null&&!r.clause?.excluded?' <span class="pill ok">Lowest cost</span>':""}<br><span class="mut">${esc(p.address)}, ${p.city}</span><br><span class="tag">${p.type}</span> ${p.priceVerified?"":'<span class="tag">price to confirm</span>'}</div>`).join("");
+ $("#pl").onclick=e=>{const d=e.target.closest(".prov");if(!d)return;document.querySelectorAll(".prov").forEach(x=>x.classList.toggle("on",x===d));
+  const p=r.providers.find(x=>x.id===d.dataset.id);mk[p.id].openPopup();S.map.setView([p.lat,p.lng],14);detail(p)};
+ $("#pl .prov").click()}
+function detail(p){const e=p.est;$("#detail").innerHTML=`<div class="card"><h2>Your estimate at ${esc(p.name)}</h2>
+ ${e.price!=null?`<div class="breakdown"><div><span>Full price</span><b>${eur(e.price)}</b></div><div><span>Insurer pays</span><b>${eur(e.insurer)}</b></div><div><span>You pay</span><b>${eur(e.customer)}</b></div></div>`:`<p>No price available. Ask the clinic for a quote.</p>`}
+ ${e.flags.map(f=>`<div class="note">${esc(f)}</div>`).join("")}
+ <p class="mut">${esc(p.address)}, ${p.city}. Always confirm the price with the clinic before treatment.</p>
+ <button class="btn ghost" onclick="document.querySelector('#talk').click()">Ask my broker to confirm</button></div>`}
+function plan(m){const p=pol();m.innerHTML=`<h1>My plan</h1><p class="lead">${esc(p.name)} ${p.sample?'<span class="pill warn">Sample</span>':""}</p>
+<div class="card"><div class="breakdown"><div><span>Insurer</span><b style="font-size:17px">${esc(p.insurer)}</b></div><div><span>Network</span><b style="font-size:17px">${esc(p.network)}</b></div><div><span>Annual limit</span><b>${eur(p.annualLimit)}</b></div><div><span>Left this year</span><b>${p.annualLimit!=null?eur(p.annualLimit-p.annualUsed):"–"}</b></div></div></div>
+<div class="card"><h2>What is covered</h2><table>${p.clauses.map(c=>`<tr><td><b>${esc(friendly[c.treatment]||c.title)}</b></td><td>${c.excluded?'<span class="pill bad">Not covered</span>':c.coverage==null?'<span class="pill warn">To confirm</span>':`<span class="pill ok">${c.coverage}% covered</span>`}</td><td class="mut">${c.waitingMonths?`Waiting period ${c.waitingMonths} months. `:""}${c.copay?`Fee ${eur(c.copay)}. `:""}${c.needsPreauth?"Needs approval. ":""}<br><small>Clause ${esc(c.id)}</small></td></tr>`).join("")}</table></div>
+<div class="card"><h2>Use your own policy</h2><div class="drop"><input type="file" id="f" accept="application/pdf"><p class="mut" id="up">Upload your policy PDF. Values are read automatically and may need your broker's confirmation.</p></div></div>`;
+ $("#f").onchange=async e=>{const fd=new FormData();fd.append("file",e.target.files[0]);$("#up").textContent="Reading your policy…";
+  const r=await api("/api/policies/upload",{method:"POST",body:fd});if(r.error){$("#up").textContent=r.error;return}await load(r.id);plan($("#main"))}}
 init();
