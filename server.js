@@ -1,7 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const pdf = require("pdf-parse");
-const { samplePolicy, treatments, providers } = require("./data/data");
+const { samplePolicy, treatments, categories, providers } = require("./data/data");
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15e6 } });
 app.use(express.json());
@@ -40,6 +40,12 @@ function extractPolicy(text, filename) {
   };
 }
 
+function limitFor(policy, treatment) {
+  const cat = treatments[treatment]?.cat;
+  if (policy.limits?.[cat]) return policy.limits[cat];
+  if (policy.annualLimit != null) return { limit: policy.annualLimit, used: policy.annualUsed || 0 };
+  return null;
+}
 function estimate(policy, treatment, providerId) {
   const clause = policy.clauses.find(c => c.treatment === treatment);
   const prov = providers.find(p => p.id === providerId);
@@ -58,7 +64,8 @@ function estimate(policy, treatment, providerId) {
   if (clause.needsPreauth) flags.push("Pre-authorisation required.");
   const pct = clause.coverage ?? 0;
   let ins = Math.max(0, price * pct / 100 - (clause.copay || 0));
-  const remaining = policy.annualLimit != null ? Math.max(0, policy.annualLimit - (policy.annualUsed || 0)) : null;
+  const lim = limitFor(policy, treatment);
+  const remaining = lim ? Math.max(0, lim.limit - lim.used) : null;
   if (remaining != null && ins > remaining) { ins = remaining; flags.push(`Annual limit nearly exhausted: only €${remaining} remaining.`); }
   ins = Math.round(ins * 100) / 100;
   flags.push("Simulated estimate for illustration. Not a binding quote.");
@@ -73,7 +80,7 @@ function search({ city, treatment, type, specialty, q }) {
     (!q || norm(p.name + p.address).includes(norm(q))));
 }
 
-app.get("/api/meta", (req, res) => res.json({ treatments, cities, specialties: [...new Set(providers.flatMap(p => p.specialties))], llm: !!process.env.ANTHROPIC_API_KEY }));
+app.get("/api/meta", (req, res) => res.json({ treatments, categories, cities, specialties: [...new Set(providers.flatMap(p => p.specialties))], llm: !!process.env.ANTHROPIC_API_KEY }));
 app.get("/api/policies", (req, res) => res.json([...policies.values()]));
 app.post("/api/policies/upload", upload.single("file"), async (req, res) => {
   try {
@@ -96,7 +103,7 @@ app.post("/api/answer", (req, res) => {
   const clause = pol.clauses.find(c => c.treatment === treatment) || null;
   const list = search({ city, treatment }).map(p => ({ ...p, est: estimate(pol, treatment, p.id) }));
   list.sort((a, b) => (a.est.customer ?? 1e9) - (b.est.customer ?? 1e9));
-  res.json({ clause, treatment, city, base: estimate(pol, treatment), providers: list, policy: { name: pol.name, sample: pol.sample, annualLimit: pol.annualLimit, annualUsed: pol.annualUsed, startDate: pol.startDate } });
+  res.json({ clause, treatment, city, base: estimate(pol, treatment), providers: list, policy: { name: pol.name, sample: pol.sample, limits: pol.limits, annualLimit: pol.annualLimit, annualUsed: pol.annualUsed, startDate: pol.startDate } });
 });
 app.post("/api/contact", (req, res) => {
   const { name, contact, message, policyId } = req.body;
@@ -112,7 +119,10 @@ app.post("/api/chat", async (req, res) => {
   const treatment = detectTreatment(message), city = detectCity(message);
   if (!treatment) {
     let reply = "I could not tell which treatment you mean. I can answer about: " + Object.values(treatments).map(t => t.label).join(", ") + ".";
-    if (/limit|limite|annual/i.test(message) && pol.annualLimit != null) reply = `The annual limit is €${pol.annualLimit}, with €${pol.annualUsed} used so far (€${pol.annualLimit - pol.annualUsed} left).`;
+    if (/limit|limite|annual/i.test(message)) {
+      const lims = pol.limits ? Object.entries(pol.limits).map(([k, l]) => `${categories[k]}: €${l.limit - l.used} left of €${l.limit}`) : pol.annualLimit != null ? [`€${pol.annualLimit - pol.annualUsed} left of €${pol.annualLimit}`] : [];
+      if (lims.length) reply = "Your annual limits: " + lims.join("; ") + ".";
+    }
     const escalate = !/limit|limite|annual/i.test(message);
     if (escalate) cases.push({ at: new Date().toISOString(), policy: pol.name, question: message });
     return res.json({ reply: reply + (escalate ? " I have flagged this question for a human broker." : ""), escalated: escalate, clauses: [], providers: [] });

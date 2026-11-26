@@ -2,9 +2,9 @@ const $=s=>document.querySelector(s), api=(u,o)=>fetch(u,o).then(r=>r.json());
 const post=(u,b)=>api(u,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)});
 const eur=n=>n==null?"–":"€"+Number(n).toFixed(2).replace(/\.00$/,"");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const S={meta:null,policies:[],pid:null,t:"rootcanal",city:"Lisboa",map:null,sel:null};
+const S={meta:null,policies:[],pid:null,t:"rootcanal",cat:"dental",city:"Lisboa",map:null,sel:null};
 const pol=()=>S.policies.find(p=>p.id===S.pid);
-const friendly={checkup:"Check-up & cleaning",filling:"Filling",extraction:"Tooth removal",rootcanal:"Root canal",crown:"Crown",whitening:"Whitening",implant:"Implant",ortho:"Braces"};
+const friendly=new Proxy({},{get:(_,k)=>S.meta?.treatments[k]?.short||k});
 async function init(){S.meta=await api("/api/meta");await load();
  $("#nav").onclick=e=>e.target.dataset.k&&go(e.target.dataset.k);
  $("#talk").onclick=()=>{$("#modal").hidden=false};$("#cx").onclick=()=>{$("#modal").hidden=true};
@@ -14,7 +14,7 @@ async function init(){S.meta=await api("/api/meta");await load();
  $("#x").onclick=()=>{$("#chat").hidden=true;$("#fab").hidden=false};
  $("#send").onclick=send;$("#in").onkeydown=e=>e.key==="Enter"&&send();
  add("a","Hello. I can tell you what your plan covers, which dentists you can visit and what you would pay.");
- $("#sugg").innerHTML=["I need a root canal in Lisbon","Are braces covered?","What is my annual limit?"].map(q=>`<button>${q}</button>`).join("");
+ $("#sugg").innerHTML=["I need a root canal in Lisbon","Cardiologist in Porto","Is an MRI covered?","What are my annual limits?"].map(q=>`<button>${q}</button>`).join("");
  $("#sugg").onclick=e=>{if(e.target.tagName==="BUTTON"){$("#in").value=e.target.textContent;send()}};
  go("home")}
 async function load(sel){S.policies=await api("/api/policies");S.pid=sel||S.pid||S.policies[0].id}
@@ -25,10 +25,15 @@ async function send(){const t=$("#in").value.trim();if(!t)return;$("#in").value=
 function go(k){if(S.map){S.map.remove();S.map=null}document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.k===k));
  window.scrollTo(0,0);k==="plan"?plan($("#main")):home($("#main"))}
 function home(m){m.innerHTML=`<h1>Is my treatment covered?</h1><p class="lead">Choose your treatment and city. We will show what your plan covers, where you can go and what you would pay.</p>
-<div class="card"><label class="l">What treatment do you need?</label><div class="chips" id="chips">${Object.keys(S.meta.treatments).map(k=>`<button class="chip ${k===S.t?"on":""}" data-k="${k}">${friendly[k]}</button>`).join("")}</div>
+<div class="card"><label class="l">What kind of care?</label><div class="chips" id="cats">${Object.entries(S.meta.categories).map(([k,v])=>`<button class="chip ${k===S.cat?"on":""}" data-c="${k}">${v}</button>`).join("")}</div>
+<label class="l">What do you need?</label><div class="chips" id="chips"></div>
 <label class="l" for="city">Where?</label><div class="chips"><select id="city">${S.meta.cities.map(c=>`<option ${c===S.city?"selected":""}>${c}</option>`).join("")}</select></div>
 <button class="btn" id="go">Check my coverage</button></div><div id="res"></div>`;
- $("#chips").onclick=e=>{const k=e.target.dataset.k;if(!k)return;S.t=k;document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.k===k))};
+ const drawChips=()=>{$("#chips").innerHTML=Object.entries(S.meta.treatments).filter(([k,v])=>v.cat===S.cat).map(([k,v])=>`<button class="chip ${k===S.t?"on":""}" data-k="${k}">${v.short}</button>`).join("")};
+ const first=()=>Object.keys(S.meta.treatments).find(k=>S.meta.treatments[k].cat===S.cat);
+ $("#cats").onclick=e=>{const c=e.target.dataset.c;if(!c)return;S.cat=c;S.t=first();document.querySelectorAll("#cats .chip").forEach(x=>x.classList.toggle("on",x.dataset.c===c));drawChips()};
+ drawChips();
+ $("#chips").onclick=e=>{const k=e.target.dataset.k;if(!k)return;S.t=k;drawChips()};
  $("#city").onchange=e=>S.city=e.target.value;$("#go").onclick=check;check()}
 async function check(){const r=await post("/api/answer",{policyId:S.pid,treatment:S.t,city:S.city});S.r=r;
  const c=r.clause,b=r.base,best=r.providers[0];
@@ -47,7 +52,7 @@ async function check(){const r=await post("/api/answer",{policyId:S.pid,treatmen
 function drawMap(r){S.map=L.map("map").setView([39.5,-8.2],6);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(S.map);
  const mk={};r.providers.forEach(p=>mk[p.id]=L.marker([p.lat,p.lng]).addTo(S.map).bindPopup(`<b>${esc(p.name)}</b><br>${esc(p.address)}`));
  S.map.fitBounds(L.latLngBounds(r.providers.map(p=>[p.lat,p.lng])).pad(.4),{maxZoom:14});
- $("#pl").innerHTML=r.providers.map((p,i)=>`<div class="prov" data-id="${p.id}">${p.est.customer!=null?`<div class="pr"><b>${eur(p.est.customer)}</b><span class="mut">you pay</span></div>`:""}<b>${esc(p.name)}</b>${i===0&&p.est.customer!=null&&!r.clause?.excluded?' <span class="pill ok">Lowest cost</span>':""}<br><span class="mut">${esc(p.address)}, ${p.city}</span><br><span class="tag">${p.type}</span> ${p.priceVerified?"":'<span class="tag">price to confirm</span>'}</div>`).join("");
+ $("#pl").innerHTML=r.providers.map((p,i)=>`<div class="prov" data-id="${p.id}">${p.est.customer!=null?`<div class="pr"><b>${eur(p.est.customer)}</b><span class="mut">you pay</span></div>`:""}<b>${esc(p.name)}</b>${i===0&&p.est.customer!=null&&!r.clause?.excluded?' <span class="pill ok">Lowest cost</span>':""}<br><span class="mut">${esc(p.address)}, ${p.city}</span><br><span class="tag">${p.type}</span> ${(p.services||[]).slice(0,3).map(s=>`<span class="tag">${esc(s)}</span>`).join(" ")} ${p.priceVerified?"":'<span class="tag">price to confirm</span>'}</div>`).join("");
  $("#pl").onclick=e=>{const d=e.target.closest(".prov");if(!d)return;document.querySelectorAll(".prov").forEach(x=>x.classList.toggle("on",x===d));
   const p=r.providers.find(x=>x.id===d.dataset.id);mk[p.id].openPopup();S.map.setView([p.lat,p.lng],14);detail(p)};
  $("#pl .prov").click()}
@@ -57,8 +62,8 @@ function detail(p){const e=p.est;$("#detail").innerHTML=`<div class="card"><h2>Y
  <p class="mut">${esc(p.address)}, ${p.city}. Always confirm the price with the clinic before treatment.</p>
  <button class="btn ghost" onclick="document.querySelector('#talk').click()">Ask my broker to confirm</button></div>`}
 function plan(m){const p=pol();m.innerHTML=`<h1>My plan</h1><p class="lead">${esc(p.name)} ${p.sample?'<span class="pill warn">Sample</span>':""}</p>
-<div class="card"><div class="breakdown"><div><span>Insurer</span><b style="font-size:17px">${esc(p.insurer)}</b></div><div><span>Network</span><b style="font-size:17px">${esc(p.network)}</b></div><div><span>Annual limit</span><b>${eur(p.annualLimit)}</b></div><div><span>Left this year</span><b>${p.annualLimit!=null?eur(p.annualLimit-p.annualUsed):"–"}</b></div></div></div>
-<div class="card"><h2>What is covered</h2><table>${p.clauses.map(c=>`<tr><td><b>${esc(friendly[c.treatment]||c.title)}</b></td><td>${c.excluded?'<span class="pill bad">Not covered</span>':c.coverage==null?'<span class="pill warn">To confirm</span>':`<span class="pill ok">${c.coverage}% covered</span>`}</td><td class="mut">${c.waitingMonths?`Waiting period ${c.waitingMonths} months. `:""}${c.copay?`Fee ${eur(c.copay)}. `:""}${c.needsPreauth?"Needs approval. ":""}<br><small>Clause ${esc(c.id)}</small></td></tr>`).join("")}</table></div>
+<div class="card"><div class="breakdown"><div><span>Insurer</span><b style="font-size:17px">${esc(p.insurer)}</b></div><div><span>Network</span><b style="font-size:17px">${esc(p.network)}</b></div></div></div><div class="card"><h2>Left to use this year</h2><div class="breakdown">${p.limits?Object.entries(p.limits).map(([k,l])=>`<div><span>${S.meta.categories[k]}</span><b>${eur(l.limit-l.used)}</b><span>of ${eur(l.limit)}</span></div>`).join(""):`<div><span>Annual limit</span><b>${p.annualLimit!=null?eur(p.annualLimit-p.annualUsed):"–"}</b></div>`}</div></div>
+${Object.entries(S.meta.categories).map(([cat,cl])=>{const rows=p.clauses.filter(c=>S.meta.treatments[c.treatment]?.cat===cat);return rows.length?`<div class="card"><h2>${cl}</h2><table>${rows.map(c=>`<tr><td><b>${esc(friendly[c.treatment]||c.title)}</b></td><td>${c.excluded?'<span class="pill bad">Not covered</span>':c.coverage==null?'<span class="pill warn">To confirm</span>':`<span class="pill ok">${c.coverage}% covered</span>`}</td><td class="mut">${c.waitingMonths?`Waiting period ${c.waitingMonths} months. `:""}${c.copay?`Fee ${eur(c.copay)}. `:""}${c.needsPreauth?"Needs approval. ":""}<br><small>Clause ${esc(c.id)}</small></td></tr>`).join("")}</table></div>`:""}).join("")}
 <div class="card"><h2>Use your own policy</h2><div class="drop"><input type="file" id="f" accept="application/pdf"><p class="mut" id="up">Upload your policy PDF. Values are read automatically and may need your broker's confirmation.</p></div></div>`;
  $("#f").onchange=async e=>{const fd=new FormData();fd.append("file",e.target.files[0]);$("#up").textContent="Reading your policy…";
   const r=await api("/api/policies/upload",{method:"POST",body:fd});if(r.error){$("#up").textContent=r.error;return}await load(r.id);plan($("#main"))}}
