@@ -50,6 +50,7 @@ function estimate(policy, treatment, providerId) {
   const clause = policy.clauses.find(c => c.treatment === treatment);
   const prov = providers.find(p => p.id === providerId);
   const flags = [];
+  if (prov?.source) flags.push(prov.basis[treatment] + " Private-price illustration; network eligibility and reimbursement are not confirmed.");
   if (!policy.sample) flags.push("Policy values were extracted automatically from PDF; verify against the original.");
   if (!clause) return { covered: null, flags: ["No clause found for this treatment in the policy. Confirm with insurer."] , clause: null };
   const price = prov?.prices[treatment];
@@ -57,7 +58,7 @@ function estimate(policy, treatment, providerId) {
     flags.push(clause.needsPreauth ? "Excluded unless insurer pre-authorisation is granted." : "Treatment excluded by the policy.");
     return { covered: false, clause, price: price ?? null, insurer: 0, customer: price ?? null, flags, provider: prov };
   }
-  if (clause.coverage == null) flags.push("Coverage percentage not found in clause; confirm with insurer.");
+  if (clause.coverage == null) return { covered: null, clause, price, flags: [...flags, "Coverage percentage unknown; no split can be calculated."] };
   if (clause.waitingMonths) flags.push(`Waiting period of ${clause.waitingMonths} months from policy start${policy.startDate ? ` (${policy.startDate})` : ""}.`);
   if (price == null) { flags.push(prov ? "Provider has no price on file for this treatment; request a quote." : "Select a provider to estimate cost."); return { covered: true, clause, price: null, flags, provider: prov }; }
   if (!prov.priceVerified) flags.push("Provider pricing is unverified; confirm with the provider.");
@@ -134,8 +135,9 @@ app.post("/api/chat", async (req, res) => {
   if (!c) reply = `I found no clause for ${treatments[treatment].label} in this policy.`;
   else if (c.excluded) reply = `${treatments[treatment].label} is excluded (clause ${c.id}).${c.needsPreauth ? " It may be possible with prior insurer authorisation." : ""}`;
   else reply = `${treatments[treatment].label} is covered at ${c.coverage ?? "an unclear"}% on the network (clause ${c.id})${c.waitingMonths ? `, with a ${c.waitingMonths}-month waiting period` : ""}.`;
-  if (c && !c.excluded && provs.length) reply += ` ${provs.length} AdvanceCare provider(s) found${city ? " in " + city : ""}. At ${provs[0].name}, price €${est.price}: insurer pays about €${est.insurer}, you pay about €${est.customer}.`;
+  if (c && !c.excluded && est.customer != null && provs.length) reply += ` Illustrative calculation assuming network benefits apply: ${provs.length} example provider(s) found${city ? " in " + city : ""}. At ${provs[0].name}, price €${est.price}: insurer pays about €${est.insurer}, you pay about €${est.customer}.`;
   else if (c && !c.excluded) reply += ` No matching providers${city ? " in " + city : ""}.`;
+  if (est.provider?.source) reply += ' ' + est.provider.basis[treatment];
   const escalated = !c || c.needsReview || c.coverage == null || c.needsPreauth || !policy_ok(pol) || (provs[0] && !provs[0].priceVerified);
   if (escalated) { reply += " Some points need confirmation, so I flagged this for a human broker."; cases.push({ at: new Date().toISOString(), policy: pol.name, question: message }); }
   if (process.env.ANTHROPIC_API_KEY) {

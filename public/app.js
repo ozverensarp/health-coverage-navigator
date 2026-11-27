@@ -31,11 +31,12 @@ function home(m){m.innerHTML=`<h1>Is my treatment covered?</h1><p class="lead">C
 <button class="btn" id="go">Check my coverage</button></div><div id="res"></div>`;
  const drawChips=()=>{$("#chips").innerHTML=Object.entries(S.meta.treatments).filter(([k,v])=>v.cat===S.cat).map(([k,v])=>`<button class="chip ${k===S.t?"on":""}" data-k="${k}">${v.short}</button>`).join("")};
  const first=()=>Object.keys(S.meta.treatments).find(k=>S.meta.treatments[k].cat===S.cat);
- $("#cats").onclick=e=>{const c=e.target.dataset.c;if(!c)return;S.cat=c;S.t=first();document.querySelectorAll("#cats .chip").forEach(x=>x.classList.toggle("on",x.dataset.c===c));drawChips()};
+ $("#cats").onclick=e=>{const c=e.target.dataset.c;if(!c)return;S.cat=c;S.t=first();document.querySelectorAll("#cats .chip").forEach(x=>x.classList.toggle("on",x.dataset.c===c));drawChips();check()};
  drawChips();
- $("#chips").onclick=e=>{const k=e.target.dataset.k;if(!k)return;S.t=k;drawChips()};
- $("#city").onchange=e=>S.city=e.target.value;$("#go").onclick=check;check()}
-async function check(){const r=await post("/api/answer",{policyId:S.pid,treatment:S.t,city:S.city});S.r=r;
+ $("#chips").onclick=e=>{const k=e.target.dataset.k;if(!k)return;S.t=k;drawChips();check()};
+ $("#city").onchange=e=>{S.city=e.target.value;check()};$("#go").onclick=check;check()}
+let serial=0;
+async function check(){const seq=++serial, panel=$("#res");const r=await post("/api/answer",{policyId:S.pid,treatment:S.t,city:S.city});if(seq!==serial||!panel.isConnected)return;if(S.map){S.map.remove();S.map=null}S.r=r;
  const c=r.clause,b=r.base,best=r.providers[0];
  let cov,cls,sub;
  if(!c){cov="Not found";cls="warn";sub="Your plan does not mention this treatment. Ask your broker."}
@@ -44,7 +45,7 @@ async function check(){const r=await post("/api/answer",{policyId:S.pid,treatmen
  const showCost=c&&!c.excluded&&best?.est.price!=null;
  $("#res").innerHTML=`<div class="steps">
  <div class="card ans ${cls}"><div class="q">1. Am I covered?</div><div class="a">${cov}</div><div class="mut">${esc(sub)}</div>${c?`<details><summary class="mut">Policy wording (clause ${esc(c.id)})</summary><p>${esc(c.text)}</p></details>`:""}</div>
- <div class="card ans"><div class="q">2. Where can I go?</div><div class="a">${r.providers.length} provider${r.providers.length===1?"":"s"}</div><div class="mut">AdvanceCare network in ${esc(S.city)} offering ${friendly[S.t].toLowerCase()}.</div></div>
+ <div class="card ans"><div class="q">2. Where can I go?</div><div class="a">${r.providers.length} provider${r.providers.length===1?"":"s"}</div><div class="mut">Example providers in ${esc(S.city)} offering ${friendly[S.t].toLowerCase()}.</div></div>
  <div class="card ans ${showCost?"":"warn"}"><div class="q">3. How much will I pay?</div><div class="a">${showCost?"from "+eur(best.est.customer):c?.excluded?"Full price":"Unknown"}</div><div class="mut">${showCost?`Cheapest option for you (price ${eur(best.est.price)}, insurer pays ${eur(best.est.insurer)}).`:"Prices depend on the provider."}</div></div></div>
  ${r.providers.length?`<div class="card"><h2>Providers in ${esc(S.city)}</h2><div class="split"><div id="map"></div><div class="plist" id="pl"></div></div></div>`:`<div class="card">No providers found in ${esc(S.city)} for this treatment. Try another city.</div>`}
  <div id="detail"></div>`;
@@ -57,6 +58,7 @@ function drawMap(r){S.map=L.map("map").setView([39.5,-8.2],6);L.tileLayer("https
   const p=r.providers.find(x=>x.id===d.dataset.id);mk[p.id].openPopup();S.map.setView([p.lat,p.lng],14);detail(p)};
  $("#pl .prov").click()}
 function detail(p){const e=p.est;$("#detail").innerHTML=`<div class="card"><h2>Your estimate at ${esc(p.name)}</h2>
+${p.source?`<p><a href="${esc(p.source)}" target="_blank" rel="noopener">Provider’s published private prices</a> · Not an insurance tariff</p>`:""}
  ${e.price!=null?`<div class="breakdown"><div><span>Full price</span><b>${eur(e.price)}</b></div><div><span>Insurer pays</span><b>${eur(e.insurer)}</b></div><div><span>You pay</span><b>${eur(e.customer)}</b></div></div>`:`<p>No price available. Ask the clinic for a quote.</p>`}
  ${e.flags.map(f=>`<div class="note">${esc(f)}</div>`).join("")}
  <p class="mut">${esc(p.address)}, ${p.city}. Always confirm the price with the clinic before treatment.</p>
