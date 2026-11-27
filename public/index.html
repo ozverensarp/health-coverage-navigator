@@ -1,17 +1,1 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Health Coverage Navigator</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css"></head><body>
-<div class="banner">Illustrative estimates only. Published Lisbon self-pay prices and mock prices are used to model insurance benefits, not confirm network eligibility.</div>
-<header><div class="brand"><span class="logo">+</span><div><b>Coverage Navigator</b><small>Provided by your insurance broker</small></div></div>
-<nav id="nav"><a data-k="home">Check a treatment</a><a data-k="plan">My plan</a></nav>
-<button class="btn ghost" id="talk">Talk to my broker</button></header>
-<main id="main"></main>
-<button class="fab" id="fab">Ask a question</button>
-<aside id="chat" hidden><div class="ch"><b>Ask about your plan</b><button id="x" aria-label="Close">×</button></div>
-<div class="chat" id="log"></div><div class="sugg" id="sugg"></div>
-<div class="row"><input id="in" placeholder="Type your question"><button class="btn" id="send">Send</button></div></aside>
-<div id="modal" class="modal" hidden><div class="box"><h3>Talk to my broker</h3><p>Leave your details and your broker will contact you.</p>
-<input id="cn" placeholder="Your name"><input id="cc" placeholder="Phone or email"><textarea id="cm" placeholder="What do you need help with? (optional)"></textarea>
-<div class="row"><button class="btn" id="cs">Send request</button><button class="btn ghost" id="cx">Cancel</button></div><p id="cmsg"></p></div></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="app.js"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Coverage Navigator | Estimate workspace</title><link rel="stylesheet" href="/intake.css"></head><body><header><a class="brand" href="/"><span class="mark">✳</span> Coverage Navigator</a><span class="workspace">CUSTOMER WORKSPACE</span><span class="demo">Demo workspace</span></header><main><div class="eyebrow">PORTUGAL &nbsp; / &nbsp; CUSTOMER SERVICES</div><h1>Your coverage, explained.</h1><p class="intro">Describe what happened. See where you can go and what you might pay.</p><div class="layout"><section class="panel"><div class="progress" id="progress"></div><form id="form"><div id="body"></div><div role="status" id="msg"></div><div class="actions"><button type="button" id="back" hidden>Back</button><button id="next">Continue <span>→</span></button></div></form></section><aside><span class="eyebrow">FIELD GUIDE &nbsp; / &nbsp; 01</span><h2>How this works</h2><ol><li><b>Start with your policy</b><small>Choose health or car insurance and tell us what happened.</small></li><li><b>Choose a budget</b><small>Use a written quote or compare example prices in your city.</small></li><li><b>See your share</b><small>We apply the policy terms to show a possible cost split.</small></li></ol><hr><p>For illustration only. Your insurer confirms eligibility and the final amount.</p><a href="/health.html">Explore health services ↗</a></aside></div></main><script src="/intake.js"></script></body></html>
