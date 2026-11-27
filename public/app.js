@@ -2,8 +2,25 @@ const $=s=>document.querySelector(s), api=(u,o)=>fetch(u,o).then(r=>r.json());
 const post=(u,b)=>api(u,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(b)});
 const eur=n=>n==null?"–":"€"+Number(n).toFixed(2).replace(/\.00$/,"");
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const S={meta:null,policies:[],pid:null,t:"rootcanal",cat:"dental",city:"Lisboa",map:null,sel:null};
+const S={meta:null,policies:[],pid:null,t:"gp",cat:"consult",city:"Lisboa",map:null,sel:null};
 const pol=()=>S.policies.find(p=>p.id===S.pid);
+const departments = {
+ gp:['General medicine','A family doctor helps with routine check-ups, ongoing conditions and referrals. The estimate is for the visit, not any tests ordered.'],
+ pediatrics:['Pediatrics','Care for infants, children and teenagers. This estimate is for a consultation; ask separately about vaccines and tests.'],
+ cardiology:['Cardiology','A heart specialist reviews heart and circulation concerns. An ECG or echocardiogram is a separate service.'],
+ dermatology:['Dermatology','A dermatologist examines skin, hair and nails. A biopsy or removal may have its own fee.'],
+ orthopedics:['Orthopedics','This clinic assesses bones, joints and movement. Scans, physiotherapy and operations are separate services.'],
+ ophthalmology:['Ophthalmology','An eye specialist checks eye health and vision. Ask whether extra tests are included in the visit fee.'],
+ gynecology:['Gynecology','A specialist provides reproductive health care. This visit estimate does not cover childbirth or a hospital stay.'],
+ bloodtest:['Laboratory','Blood samples are analysed here. Ask for a quote for the exact tests on your prescription.'],
+ xray:['Radiology · X-ray','An X-ray produces images of a specific body area. Confirm the number of views included in the price.'],
+ ultrasound:['Radiology · Ultrasound','This scan uses sound waves. Ask the imaging unit for the price for the body area on your referral.'],
+ mri:['Radiology · MRI and CT','MRI and CT are different scans. Confirm which was prescribed, whether contrast is needed and whether your plan requires approval.'],
+ physio:['Rehabilitation','Physiotherapists help restore movement and strength. Compare the cost of one session, not a whole course.'],
+ er:['Emergency department','Urgent assessment and treatment. Tests and admission can add costs. In a medical emergency in Portugal, call 112 rather than waiting for a coverage check.'],
+ surgery:['Day surgery','Patients usually go home on the day of the procedure. Ask for a written quote covering the surgeon, anaesthesia and operating theatre.'],
+ hospitalization:['Inpatient wards','Patients stay overnight for care and monitoring. A nightly estimate is not the total bill; confirm room, treatment and length of stay.']
+};
 const friendly=new Proxy({},{get:(_,k)=>S.meta?.treatments[k]?.short||k});
 async function init(){S.meta=await api("/api/meta");await load();
  $("#nav").onclick=e=>e.target.dataset.k&&go(e.target.dataset.k);
@@ -13,7 +30,7 @@ async function init(){S.meta=await api("/api/meta");await load();
  $("#fab").onclick=()=>{$("#chat").hidden=false;$("#fab").hidden=true;$("#in").focus()};
  $("#x").onclick=()=>{$("#chat").hidden=true;$("#fab").hidden=false};
  $("#send").onclick=send;$("#in").onkeydown=e=>e.key==="Enter"&&send();
- add("a","Hello. I can tell you what your plan covers, which dentists you can visit and what you would pay.");
+ add("a","Hello. I can tell you what your plan covers, which providers offer the service and what you would pay.");
  $("#sugg").innerHTML=["I need a root canal in Lisbon","Cardiologist in Porto","Is an MRI covered?","What are my annual limits?"].map(q=>`<button>${q}</button>`).join("");
  $("#sugg").onclick=e=>{if(e.target.tagName==="BUTTON"){$("#in").value=e.target.textContent;send()}};
  go("home")}
@@ -26,10 +43,10 @@ function go(k){if(S.map){S.map.remove();S.map=null}document.querySelectorAll("na
  window.scrollTo(0,0);k==="plan"?plan($("#main")):home($("#main"))}
 function home(m){m.innerHTML=`<h1>Is my treatment covered?</h1><p class="lead">Choose your treatment and city. We will show what your plan covers, where you can go and what you would pay.</p>
 <div class="card"><label class="l">What kind of care?</label><div class="chips" id="cats">${Object.entries(S.meta.categories).map(([k,v])=>`<button class="chip ${k===S.cat?"on":""}" data-c="${k}">${v}</button>`).join("")}</div>
-<label class="l">What do you need?</label><div class="chips" id="chips"></div>
+<label class="l">What do you need?</label><div class="chips" id="chips"></div><section class="department" id="dept" aria-live="polite"></section>
 <label class="l" for="city">Where?</label><div class="chips"><select id="city">${S.meta.cities.map(c=>`<option ${c===S.city?"selected":""}>${c}</option>`).join("")}</select></div>
 <button class="btn" id="go">Check my coverage</button></div><div id="res"></div>`;
- const drawChips=()=>{$("#chips").innerHTML=Object.entries(S.meta.treatments).filter(([k,v])=>v.cat===S.cat).map(([k,v])=>`<button class="chip ${k===S.t?"on":""}" data-k="${k}">${v.short}</button>`).join("")};
+ const drawChips=()=>{$("#chips").innerHTML=Object.entries(S.meta.treatments).filter(([k,v])=>v.cat===S.cat).map(([k,v])=>`<button class="chip ${k===S.t?"on":""}" data-k="${k}">${v.short}</button>`).join("");const d=departments[S.t];$("#dept").hidden=!d;$("#dept").innerHTML=d?`<strong>${esc(d[0])}</strong><div>${esc(d[1])}</div>`:""};
  const first=()=>Object.keys(S.meta.treatments).find(k=>S.meta.treatments[k].cat===S.cat);
  $("#cats").onclick=e=>{const c=e.target.dataset.c;if(!c)return;S.cat=c;S.t=first();document.querySelectorAll("#cats .chip").forEach(x=>x.classList.toggle("on",x.dataset.c===c));drawChips()};
  drawChips();
@@ -59,6 +76,7 @@ function drawMap(r){S.map=L.map("map").setView([39.5,-8.2],6);L.tileLayer("https
 function detail(p){const e=p.est;$("#detail").innerHTML=`<div class="card"><h2>Your estimate at ${esc(p.name)}</h2>
  ${e.price!=null?`<div class="breakdown"><div><span>Full price</span><b>${eur(e.price)}</b></div><div><span>Insurer pays</span><b>${eur(e.insurer)}</b></div><div><span>You pay</span><b>${eur(e.customer)}</b></div></div>`:`<p>No price available. Ask the clinic for a quote.</p>`}
  ${e.flags.map(f=>`<div class="note">${esc(f)}</div>`).join("")}
+ ${p.type==="hospital"?`<h3>Departments at this sample hospital</h3><p>${p.specialties.map(esc).join(" · ")}</p>`:""}
  <p class="mut">${esc(p.address)}, ${p.city}. Always confirm the price with the clinic before treatment.</p>
  <button class="btn ghost" onclick="document.querySelector('#talk').click()">Ask my broker to confirm</button></div>`}
 function plan(m){const p=pol();m.innerHTML=`<h1>My plan</h1><p class="lead">${esc(p.name)} ${p.sample?'<span class="pill warn">Sample</span>':""}</p>
