@@ -17,6 +17,7 @@ const samplePolicy = {
     C("4.1", "bloodtest", "Análises clínicas", "Análises clínicas prescritas cobertas a 80% na rede.", 80),
     C("4.2", "xray", "Radiologia", "Radiografias e ecografias prescritas cobertas a 80% na rede.", 80),
     C("4.2", "ultrasound", "Ecografia", "Radiografias e ecografias prescritas cobertas a 80% na rede.", 80),
+    C("4.3", "ct", "TAC", "TAC coberta a 70%, com prescrição médica e carência de 3 meses.", 70, 0, 3, { needsPreauth: true }),
     C("4.3", "mri", "Ressonância magnética e TAC", "Ressonância magnética e TAC cobertas a 70%, com prescrição médica e carência de 3 meses.", 70, 0, 3, { needsPreauth: true }),
     C("5.1", "physio", "Fisioterapia", "Fisioterapia coberta a 60% até 20 sessões por ano, com prescrição.", 60, 5),
     C("6.1", "er", "Urgências", "Urgência hospitalar coberta a 80%, com copagamento de 20 € por episódio.", 80, 20),
@@ -46,7 +47,8 @@ const treatments = {
   bloodtest: T("diagnostic", "Blood tests", "Blood tests", ["blood", "analises", "lab test"]),
   xray: T("diagnostic", "X-ray", "X-ray", ["x-ray", "xray", "radiograph"]),
   ultrasound: T("diagnostic", "Ultrasound", "Ultrasound", ["ultrasound", "ecograf", "echograph"]),
-  mri: T("diagnostic", "MRI / CT scan", "MRI / CT scan", ["mri", "magnetic", "ct scan"]),
+  mri: T("diagnostic", "MRI scan", "MRI", ["mri", "magnetic"]),
+  ct: T("diagnostic", "CT scan", "CT scan", ["ct scan", "tomografia"]),
   physio: T("hospital", "Physiotherapy session", "Physiotherapy", ["physio", "fisioter"]),
   er: T("hospital", "Emergency room visit", "Emergency room", ["emergency", "urgenc", "a&e"]),
   surgery: T("hospital", "Outpatient surgery", "Surgery", ["surgery", "operation", "cirurgia"]),
@@ -64,6 +66,7 @@ const treatments = {
 const mk = (id, name, type, city, address, lat, lng, spec, prices, verified, services) =>
   ({ id, name, type, city, address, lat, lng, specialties: spec, services: services || [], prices, priceVerified: verified, network: "AdvanceCare (mock)" });
 const providers = [
+  ...require('./lisbon-references'),
   mk("p1", "Clínica Dentária Avenidas (mock)", "clinic", "Lisboa", "Av. da República 50", 38.7367, -9.1459, ["dental", "endodontics", "prosthodontics"], { checkup: 35, rootcanal: 180, extraction: 60, filling: 55, crown: 350 }, true),
   mk("p2", "Sorriso Chiado Dental (mock)", "dentist", "Lisboa", "Rua Garrett 30", 38.7106, -9.1420, ["dental", "endodontics", "cosmetic"], { checkup: 40, rootcanal: 210, extraction: 70, filling: 60, crown: 380, whitening: 180 }, true),
   mk("p3", "Endo Lisboa Especialistas (mock)", "clinic", "Lisboa", "Rua Castilho 14", 38.7248, -9.1535, ["endodontics"], { rootcanal: 260, checkup: 45 }, false),
