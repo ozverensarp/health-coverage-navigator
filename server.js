@@ -46,14 +46,14 @@ function limitFor(policy, treatment) {
   if (policy.annualLimit != null) return { limit: policy.annualLimit, used: policy.annualUsed || 0 };
   return null;
 }
-function estimate(policy, treatment, providerId) {
+function estimate(policy, treatment, providerId, quoteAmount) {
   const clause = policy.clauses.find(c => c.treatment === treatment);
   const prov = providers.find(p => p.id === providerId);
   const flags = [];
   if (prov?.source) flags.push(prov.basis[treatment] + " Private-price illustration; network eligibility and reimbursement are not confirmed.");
   if (!policy.sample) flags.push("Policy values were extracted automatically from PDF; verify against the original.");
   if (!clause) return { covered: null, flags: ["No clause found for this treatment in the policy. Confirm with insurer."] , clause: null };
-  const price = prov?.prices[treatment];
+  const price = quoteAmount ?? prov?.prices[treatment];
   if (clause.excluded) {
     flags.push(clause.needsPreauth ? "Excluded unless insurer pre-authorisation is granted." : "Treatment excluded by the policy.");
     return { covered: false, clause, price: price ?? null, insurer: 0, customer: price ?? null, flags, provider: prov };
@@ -61,7 +61,7 @@ function estimate(policy, treatment, providerId) {
   if (clause.coverage == null) return { covered: null, clause, price, flags: [...flags, "Coverage percentage unknown; no split can be calculated."] };
   if (clause.waitingMonths) flags.push(`Waiting period of ${clause.waitingMonths} months from policy start${policy.startDate ? ` (${policy.startDate})` : ""}.`);
   if (price == null) { flags.push(prov ? "Provider has no price on file for this treatment; request a quote." : "Select a provider to estimate cost."); return { covered: true, clause, price: null, flags, provider: prov }; }
-  if (!prov.priceVerified) flags.push("Provider pricing is unverified; confirm with the provider.");
+  if (prov && !prov.priceVerified) flags.push("Provider pricing is unverified; confirm with the provider.");
   if (clause.needsPreauth) flags.push("Pre-authorisation required.");
   const pct = clause.coverage ?? 0;
   let ins = Math.max(0, price * pct / 100 - (clause.copay || 0));
@@ -81,6 +81,7 @@ function search({ city, treatment, type, specialty, q }) {
     (!q || norm(p.name + p.address).includes(norm(q))));
 }
 
+require('./intake')({app,upload,pdf,cities,treatments,samplePolicy,detectTreatment,extractPolicy,estimate,search,norm});
 app.get("/api/meta", (req, res) => res.json({ treatments, categories, cities, specialties: [...new Set(providers.flatMap(p => p.specialties))], llm: !!process.env.ANTHROPIC_API_KEY }));
 app.get("/api/policies", (req, res) => res.json([...policies.values()]));
 app.post("/api/policies/upload", upload.single("file"), async (req, res) => {
